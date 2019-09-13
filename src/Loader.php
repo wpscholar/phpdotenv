@@ -45,8 +45,9 @@ class Loader {
 	 * DotEnv constructor.
 	 */
 	public function __construct() {
-		$this->adapterRegistry  = new AdapterRegistry();
+		$this->adapterRegistry = new AdapterRegistry();
 		$this->variableRegistry = new VariableRegistry();
+		$this->useAdapters( [ 'env', 'putenv', 'server' ] );
 	}
 
 	/**
@@ -61,9 +62,6 @@ class Loader {
 		// Setup adapters
 		if ( isset( $options['adapters'] ) ) {
 			$this->useAdapters( (array) $options['adapters'] );
-		} else {
-			// Set default adapters
-			$this->useAdapters( [ 'env', 'putenv', 'server' ] );
 		}
 
 		// Set variable defaults
@@ -97,33 +95,37 @@ class Loader {
 	 */
 	public function parse( $filepaths ) {
 
-		$filepaths = (array) $filepaths;
+		if ( ! empty( $filepaths ) ) {
 
-		// Check each file path sequentially until we find an env file.
-		foreach ( $filepaths as $filepath ) {
+			$filepaths = (array) $filepaths;
 
-			if ( ! file_exists( $filepath ) ) {
-				continue;
+			// Check each file path sequentially until we find an env file.
+			foreach ( $filepaths as $filepath ) {
+
+				if ( ! file_exists( $filepath ) ) {
+					continue;
+				}
+
+				if ( ! is_readable( $filepath ) || false === ( $contents = file_get_contents( $filepath ) ) ) {
+					throw new \InvalidArgumentException( sprintf( "Environment file '%s' is not readable", $filepath ) );
+				}
+
+				if ( $contents ) {
+					break;
+				}
 			}
 
-			if ( ! is_readable( $filepath ) || false === ( $contents = file_get_contents( $filepath ) ) ) {
-				throw new \InvalidArgumentException( sprintf( "Environment file '%s' is not readable", $filepath ) );
+			if ( ! isset( $contents ) ) {
+				throw new \InvalidArgumentException( 'Unable to find .env file' );
 			}
 
-			if ( $contents ) {
-				break;
-			}
+			// Parse file
+			$env = new Parser( $contents );
+
+			// Set variables
+			$this->variableRegistry->populate( $env->getContent() );
+
 		}
-
-		if ( ! isset( $contents ) ) {
-			throw new \InvalidArgumentException( 'Unable to find .env file' );
-		}
-
-		// Parse file
-		$env = new Parser( $contents );
-
-		// Set variables
-		$this->variableRegistry->populate( $env->getContent() );
 
 		$this->parsed = true;
 
@@ -133,9 +135,9 @@ class Loader {
 	/**
 	 * Load variables into environment. Existing variables will not be overwritten.
 	 *
+	 * @return $this
 	 * @throws Exception\ValidationException
 	 *
-	 * @return $this
 	 */
 	public function load() {
 
@@ -158,9 +160,9 @@ class Loader {
 	/**
 	 * Load variables into environment. Existing variables will not be overwritten.
 	 *
+	 * @return $this
 	 * @throws Exception\ValidationException
 	 *
-	 * @return $this
 	 */
 	public function overload() {
 
@@ -210,7 +212,6 @@ class Loader {
 	 */
 	public function set( $name, $value ) {
 		$this->variableRegistry->set( $name, $value );
-		$this->parsed = true;
 
 		return $this;
 	}
@@ -253,9 +254,9 @@ class Loader {
 	/**
 	 * Checks if required variables are set.
 	 *
+	 * @return $this
 	 * @throws Exception\ValidationException
 	 *
-	 * @return $this
 	 */
 	public function checkRequired() {
 
@@ -275,7 +276,7 @@ class Loader {
 	 * Set default value in the event that a value is not set.
 	 *
 	 * @param string $name
-	 * @param mixed  $default
+	 * @param mixed $default
 	 *
 	 * @return $this
 	 */
